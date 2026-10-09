@@ -1,5 +1,5 @@
 use concurrent_intrusive_collections::{
-    ConcurrentQueue, PopError, SinglyLinked,
+    ConcurrentShardedQueue, PopError, SinglyLinked,
     epoch::{Atomic, Owned},
 };
 use std::sync::Arc;
@@ -19,7 +19,7 @@ unsafe impl SinglyLinked for Job {
 }
 
 fn main() {
-    let queue = Arc::new(ConcurrentQueue::<Job>::with_concurrency(4));
+    let queue = Arc::new(ConcurrentShardedQueue::<Job>::with_concurrency(4));
     let consumers: Vec<_> = (0..2)
         .map(|_| {
             let queue = Arc::clone(&queue);

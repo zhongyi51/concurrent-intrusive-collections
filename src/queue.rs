@@ -1,5 +1,6 @@
+use crate::fifo_queue::FifoQueue;
 use crate::helper::{current_thread_id, default_concurrency};
-use crate::{ConcurrentFifoQueue, PopError, PushError, SinglyLinked, epoch};
+use crate::{PopError, PushError, SinglyLinked, epoch};
 use epoch::Owned;
 
 /// An intrusive MPMC queue distributed across independent FIFO shards.
@@ -15,40 +16,40 @@ use epoch::Owned;
 /// as a dummy until its next successful pop or collection destruction. At most
 /// one such dummy per shard is retained, in addition to epoch-retired nodes.
 /// Callbacks run while pinned and cannot return borrowed node references.
-/// Use [`ConcurrentFifoQueue`] if global FIFO or a single atomic close is needed.
+/// A single shard (`with_concurrency(1)`) provides globally ordered FIFO.
 /// Only the per-shard link-update algorithm is lock-free; allocation, collector
 /// work, accessors, and callbacks need not be lock-free.
 ///
 /// # Example
 ///
 /// ```
-/// use concurrent_intrusive_collections::{ConcurrentQueue, PopError, SinglyLinked,
+/// use concurrent_intrusive_collections::{ConcurrentShardedQueue, PopError, SinglyLinked,
 ///     epoch::{Atomic, Owned}};
 /// struct Job { next: Atomic<Self>, id: usize }
 /// // SAFETY: each node has a fixed, private, non-owning forward link.
 /// unsafe impl SinglyLinked for Job {
 ///     unsafe fn next(&self) -> &Atomic<Self> { &self.next }
 /// }
-/// let queue = ConcurrentQueue::with_concurrency(4);
+/// let queue = ConcurrentShardedQueue::with_concurrency(4);
 /// // One producer thread always enqueues into the same shard.
 /// for id in 0..3 { queue.push(Owned::new(Job { next: Atomic::null(), id })).unwrap(); }
 /// queue.close();
 /// for id in 0..3 { assert_eq!(queue.pop_with(|job| job.id), Ok(id)); }
 /// assert_eq!(queue.pop_with(|_| ()), Err(PopError::Closed));
 /// ```
-pub struct ConcurrentQueue<T: SinglyLinked + Send + Sync + 'static> {
-    // ConcurrentFifoQueue already cache-pads its head and tail.
-    shards: Box<[ConcurrentFifoQueue<T>]>,
+pub struct ConcurrentShardedQueue<T: SinglyLinked + Send + Sync + 'static> {
+    // FifoQueue already cache-pads its head and tail.
+    shards: Box<[FifoQueue<T>]>,
     shard_index_mask: usize,
 }
 
-impl<T: SinglyLinked + Send + Sync + 'static> Default for ConcurrentQueue<T> {
+impl<T: SinglyLinked + Send + Sync + 'static> Default for ConcurrentShardedQueue<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentQueue<T> {
+impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentShardedQueue<T> {
     /// Creates a queue using available parallelism rounded up to a power of two.
     pub fn new() -> Self {
         Self::with_concurrency(default_concurrency())
@@ -68,7 +69,7 @@ impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentQueue<T> {
         );
         Self {
             shards: (0..shard_count)
-                .map(|_| ConcurrentFifoQueue::new())
+                .map(|_| FifoQueue::new())
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
             shard_index_mask: shard_count - 1,
@@ -90,8 +91,8 @@ impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentQueue<T> {
     /// until the next pop, or retires it if another consumer already advanced.
     ///
     /// ```compile_fail
-    /// use concurrent_intrusive_collections::{ConcurrentQueue, SinglyLinked};
-    /// fn escape<T: SinglyLinked + Send + Sync + 'static>(q: &ConcurrentQueue<T>) -> &T {
+    /// use concurrent_intrusive_collections::{ConcurrentShardedQueue, SinglyLinked};
+    /// fn escape<T: SinglyLinked + Send + Sync + 'static>(q: &ConcurrentShardedQueue<T>) -> &T {
     ///     q.pop_with(|node| node).unwrap()
     /// }
     /// ```
@@ -174,7 +175,7 @@ mod tests {
 
     #[test]
     fn probes_local_then_xor_groups_preserving_shard_fifo() {
-        let queue = ConcurrentQueue::with_concurrency(8);
+        let queue = ConcurrentShardedQueue::with_concurrency(8);
         let local = queue.current_shard_index();
         for shard in 0..8 {
             for offset in 0..2 {
@@ -199,7 +200,7 @@ mod tests {
 
     #[test]
     fn partially_closed_shards_do_not_report_globally_closed() {
-        let queue = ConcurrentQueue::<Node>::with_concurrency(4);
+        let queue = ConcurrentShardedQueue::<Node>::with_concurrency(4);
         queue.shards[queue.current_shard_index()].close();
         assert!(!queue.is_closed());
         assert_eq!(queue.pop_with(|_| ()), Err(PopError::Empty));

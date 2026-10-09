@@ -1,6 +1,6 @@
 //! Allocation attribution and repeatable CPU workloads, separate from throughput benchmarks.
 use concurrent_intrusive_collections::{
-    ConcurrentFifoQueue, ConcurrentQueue, ConcurrentShardedStack, PopError, SinglyLinked,
+    ConcurrentShardedQueue, ConcurrentShardedStack, PopError, SinglyLinked,
     epoch::{self, Atomic, Owned},
 };
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -141,9 +141,11 @@ fn allocations() {
         "phase,operations,alloc_calls,requested_bytes,dealloc_calls,realloc_calls,allocation_sizes"
     );
     drop(measure("first-pin", 1, epoch::pin));
-    let fifo = measure("construct-fifo", 1, ConcurrentFifoQueue::<Node>::new);
+    let fifo = measure("construct-queue-1", 1, || {
+        ConcurrentShardedQueue::<Node>::with_concurrency(1)
+    });
     let queue = measure("construct-queue-32", 1, || {
-        ConcurrentQueue::<Node>::with_concurrency(32)
+        ConcurrentShardedQueue::<Node>::with_concurrency(32)
     });
     let stack = measure("construct-stack-32", 1, || {
         ConcurrentShardedStack::<Node>::with_concurrency(32)
@@ -155,7 +157,7 @@ fn allocations() {
             black_box(queue.pop_with(|_| ())).unwrap_err();
         }
     });
-    measure("warm-empty-fifo", N, || {
+    measure("warm-empty-queue-1", N, || {
         for _ in 0..N {
             black_box(fifo.pop_with(|_| ())).unwrap_err();
         }
@@ -219,28 +221,28 @@ fn allocations() {
         }
     });
     reclaim(3 * N);
-    let queue = ConcurrentQueue::<Node>::with_concurrency(32);
+    let queue = ConcurrentShardedQueue::<Node>::with_concurrency(32);
     measure("close-queue-32", 1, || queue.close());
     drop(queue);
     drop(fifo);
     drop(stack);
     reclaim(3 * N + 1);
     eprintln!(
-        "layout: fifo={} bytes; sharded handle={} bytes; node={} bytes",
-        std::mem::size_of::<ConcurrentFifoQueue<Node>>(),
-        std::mem::size_of::<ConcurrentQueue<Node>>(),
+        "layout: one-shard handle={} bytes; sharded handle={} bytes; node={} bytes",
+        std::mem::size_of::<ConcurrentShardedQueue<Node>>(),
+        std::mem::size_of::<ConcurrentShardedQueue<Node>>(),
         std::mem::size_of::<Node>()
     );
 }
 
 #[inline(never)]
-fn empty_batch(queue: &ConcurrentQueue<Node>) {
+fn empty_batch(queue: &ConcurrentShardedQueue<Node>) {
     for _ in 0..10000 {
         black_box(queue.pop_with(|_| ())).unwrap_err();
     }
 }
 #[inline(never)]
-fn roundtrip_batch(queue: &ConcurrentQueue<Node>) {
+fn roundtrip_batch(queue: &ConcurrentShardedQueue<Node>) {
     for value in 0..10000 {
         queue.push(node(value)).unwrap();
         black_box(queue.pop_with(|node| node.value)).unwrap();
@@ -250,7 +252,7 @@ fn main() {
     let args: Vec<_> = std::env::args().collect();
     if let Some(pos) = args.iter().position(|a| a == "--cpu") {
         let work = &args[pos + 1];
-        let queue = ConcurrentQueue::with_concurrency(32);
+        let queue = ConcurrentShardedQueue::with_concurrency(32);
         let deadline = Instant::now() + Duration::from_secs(5);
         while Instant::now() < deadline {
             match work.as_str() {

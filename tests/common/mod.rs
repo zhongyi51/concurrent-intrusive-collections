@@ -1,4 +1,4 @@
-use concurrent_intrusive_collections::epoch;
+use crossbeam_epoch as epoch;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};

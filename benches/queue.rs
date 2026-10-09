@@ -1,6 +1,6 @@
 //! Paired, dependency-free queue benchmark. See benches/README.md for methodology.
 use concurrent_intrusive_collections::{
-    ConcurrentFifoQueue, ConcurrentQueue, PopError, SinglyLinked,
+    ConcurrentShardedQueue, PopError, SinglyLinked,
     epoch::{self, Atomic, Owned},
 };
 use crossbeam_utils::CachePadded;
@@ -46,15 +46,7 @@ trait Queue: Sync {
     fn push(&self, node: Owned<Node>);
     fn pop(&self) -> Result<usize, PopError>;
 }
-impl Queue for ConcurrentFifoQueue<Node> {
-    fn push(&self, node: Owned<Node>) {
-        self.push(node).unwrap();
-    }
-    fn pop(&self) -> Result<usize, PopError> {
-        self.pop_with(|node| black_box(node.id))
-    }
-}
-impl Queue for ConcurrentQueue<Node> {
+impl Queue for ConcurrentShardedQueue<Node> {
     fn push(&self, node: Owned<Node>) {
         self.push(node).unwrap();
     }
@@ -263,27 +255,20 @@ fn main() {
             // One discarded warmup, then rotate/reverse implementation order
             // to reduce systematic warmup, thermal, and scheduling bias.
             for sample in 0..=samples {
-                for offset in 0..4 {
+                for offset in 0..3 {
                     let choice = if sample % 2 == 0 {
-                        (offset + sample) % 4
+                        (offset + sample) % 3
                     } else {
-                        (3 - offset + sample) % 4
+                        (2 - offset + sample) % 3
                     };
-                    let (implementation, shards, result) = match choice {
-                        0 => (
-                            "ms",
-                            1,
-                            trial(ConcurrentFifoQueue::new(), work, mode, items),
-                        ),
-                        n => {
-                            let shards = [0, 1, 8, 32][n];
-                            (
-                                "sharded",
-                                shards,
-                                trial(ConcurrentQueue::with_concurrency(shards), work, mode, items),
-                            )
-                        }
-                    };
+                    let shards = [1, 8, 32][choice];
+                    let implementation = "sharded";
+                    let result = trial(
+                        ConcurrentShardedQueue::with_concurrency(shards),
+                        work,
+                        mode,
+                        items,
+                    );
                     if sample != 0 {
                         let (ns, ops, misses) = result;
                         println!(

@@ -12,7 +12,7 @@ or `intrusive-collections` dependency.
 
 ```toml
 [dependencies]
-concurrent-intrusive-collections = "0.1"
+concurrent-intrusive-collections = "0.2"
 ```
 
 Requires **Rust 1.85+** and pointer-width atomics. The default `std` feature enables
@@ -21,8 +21,7 @@ reexport, not the concurrent containers themselves.
 
 | Collection | Ordering | Close | Typical use |
 | --- | --- | --- | --- |
-| `ConcurrentQueue` | FIFO per shard | Closes shards individually | Concurrent work with relaxed global ordering |
-| `ConcurrentFifoQueue` | Global FIFO | One atomic close | Strictly ordered enqueue/dequeue |
+| `ConcurrentShardedQueue` | FIFO per shard | Closes shards individually | Concurrent work with relaxed global ordering |
 | `ConcurrentShardedStack` | LIFO per shard | Closes shards individually | Locality-oriented work stacks |
 
 These APIs transfer `Owned<T>` nodes and expose popped data through shared-borrow
@@ -147,7 +146,7 @@ accessors, and callbacks need not be lock-free.
 
 ## Concurrent sharded queue
 
-`ConcurrentQueue<T>` uses independent Michael–Scott FIFO shards, local enqueue,
+`ConcurrentShardedQueue<T>` uses independent Michael–Scott FIFO shards, local enqueue,
 and the same XOR probing as the stack. `new()` uses available parallelism rounded
 up to a power of two; `with_concurrency(n)` selects a nonzero power-of-two count.
 `shard_count()` reports that count. A single guard protects each full pop scan.
@@ -169,63 +168,14 @@ as a dummy until its next successful pop or collection destruction.
 
 The API is `push(Owned<T>)`, `pop_with(f)`, `close()`, `is_closed()`, and
 `is_empty()`, with the same node bounds and callback restrictions as the stack.
-Use one shard for globally ordered operations, or `ConcurrentFifoQueue` below
-to avoid the shard-routing overhead entirely.
+Use `with_concurrency(1)` for globally ordered FIFO through the same public API.
 
 The default was changed to sharding after paired throughput benchmarks showed
 substantial gains under multi-producer contention. Single-thread and empty-scan
 costs increase; this is not a universal performance improvement. See
-[benchmark methodology and measured results](https://github.com/zhongyi51/concurrent-intrusive-collections/blob/main/benches/README.md). The original
-strict implementation remains available as `ConcurrentFifoQueue`.
+[benchmark methodology and measured results](https://github.com/zhongyi51/concurrent-intrusive-collections/blob/main/benches/README.md). The strict FIFO shard is an internal implementation detail.
 The subsequent [profiling report](https://github.com/zhongyi51/concurrent-intrusive-collections/blob/main/benches/PROFILING.md) explains allocation costs,
 the smaller shard layout, and the measured empty-probe optimization.
-
-## Globally ordered FIFO queue
-
-`ConcurrentFifoQueue<T>` is an unbounded MPMC queue using the
-[Michael–Scott algorithm](https://www.cs.rochester.edu/research/synchronization/pseudocode/queues.html)
-with epoch reclamation. It uses the same `SinglyLinked` trait, node bounds, and
-`push(Owned<T>)` / `pop_with(f)` ownership API as the stack, without wrapper nodes.
-It provides **globally linearizable FIFO** ordering. Overlapping calls may take
-effect in either order; concurrent callbacks need not finish in dequeue order.
-
-Using the `Job` type from the stack example:
-
-```rust
-use concurrent_intrusive_collections::{ConcurrentFifoQueue, PopError, epoch::{Atomic, Owned}};
-
-let queue = ConcurrentFifoQueue::new();
-for name in ["compile", "test", "package"] {
-    queue.push(Owned::new(Job { next: Atomic::null(), name: name.into() })).unwrap();
-}
-assert!(queue.close());
-for expected in ["compile", "test", "package"] {
-    assert_eq!(queue.pop_with(|job| job.name.clone()).unwrap(), expected);
-}
-assert_eq!(queue.pop_with(|_| ()), Err(PopError::Closed));
-```
-
-`new()` needs neither `T: Default` nor a caller-supplied dummy. An internal atomic
-field represents the initial virtual dummy. After a dequeue, the consumed node
-becomes the moving dummy, and the **previous dummy** is retired through EBR.
-The last popped node therefore remains allocated until the next successful pop
-or queue destruction, even if the queue is empty or closed. Enqueue alone does
-not retire it. As with the stack, callbacks run while pinned and cannot return
-borrowed node references or immediately reinsert the node.
-
-`close()` atomically tags the terminal null link and competes with enqueue at
-that same link. Exactly one concurrent closer returns `true`; existing nodes
-remain available in FIFO order. `is_empty()` and `is_closed()` observe queue
-state, which may change immediately afterwards. Any operation needing the tail
-can help advance it when a producer pauses after publishing a node.
-
-Michael–Scott fits this API because nodes need only an embedded `next` pointer.
-Newer designs such as
-[SCQ (DISC 2019)](https://arxiv.org/abs/1908.04511) pursue scalable throughput with
-fetch-and-add and circular queues, including an unbounded extension. They are
-worth evaluating for a storage API based on array slots or segments; they do
-not directly replace this intrusive node-link algorithm. No relative throughput
-claim is made without benchmarks on the intended workload.
 
 ## Internal helpers
 
@@ -235,7 +185,7 @@ their implementations remain separate because ordering and reclamation differ.
 
 ## Features
 
-The default `std` feature enables the stack, both queues, and Crossbeam's default
+The default `std` feature enables the sharded stack and queue, and Crossbeam's default
 collector. With `default-features = false`, the crate exposes the two link traits
 and reexports `crossbeam-epoch` with `alloc`, without requiring `std` itself.
 

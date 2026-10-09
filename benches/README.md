@@ -1,5 +1,10 @@
 # Queue benchmark
 
+> Historical measurements below use the 0.1.0 API names. In 0.2.0 the public
+> queue is `ConcurrentShardedQueue`; the FIFO shard is private. Current benchmarks
+> compare the public queue at 1, 8, and 32 shards, so new results do not include
+> the old direct `ms` baseline.
+
 The later [allocation/CPU profiling report](PROFILING.md) records the compact
 shard layout and empty-scan optimization, with a fresh before/after comparison.
 The results below are the original sharding-selection baseline, before that change.

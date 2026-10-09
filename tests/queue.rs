@@ -2,7 +2,7 @@
 mod common;
 use common::collect_until;
 use concurrent_intrusive_collections::{
-    ConcurrentQueue, PopError, SinglyLinked,
+    ConcurrentShardedQueue, PopError, SinglyLinked,
     epoch::{Atomic, Owned},
 };
 use std::sync::{
@@ -39,13 +39,13 @@ fn node(id: usize, drops: &Arc<AtomicUsize>) -> Owned<Node> {
 #[test]
 fn constructors_and_single_thread_fifo() {
     fn send_sync<T: Send + Sync>() {}
-    send_sync::<ConcurrentQueue<Node>>();
+    send_sync::<ConcurrentShardedQueue<Node>>();
     assert!(
-        ConcurrentQueue::<Node>::default()
+        ConcurrentShardedQueue::<Node>::default()
             .shard_count()
             .is_power_of_two()
     );
-    let queue = ConcurrentQueue::with_concurrency(8);
+    let queue = ConcurrentShardedQueue::with_concurrency(8);
     assert_eq!(queue.shard_count(), 8);
     assert!(queue.is_empty());
     let drops = Arc::new(AtomicUsize::new(0));
@@ -67,18 +67,18 @@ fn constructors_and_single_thread_fifo() {
 #[test]
 #[should_panic(expected = "shard_count must be non-zero")]
 fn rejects_zero_shards() {
-    let _ = ConcurrentQueue::<Node>::with_concurrency(0);
+    let _ = ConcurrentShardedQueue::<Node>::with_concurrency(0);
 }
 
 #[test]
 #[should_panic(expected = "shard_count must be a power of two")]
 fn rejects_non_power_of_two_shards() {
-    let _ = ConcurrentQueue::<Node>::with_concurrency(3);
+    let _ = ConcurrentShardedQueue::<Node>::with_concurrency(3);
 }
 
 #[test]
 fn rejection_preserves_original_allocation() {
-    let queue = ConcurrentQueue::with_concurrency(4);
+    let queue = ConcurrentShardedQueue::with_concurrency(4);
     let drops = Arc::new(AtomicUsize::new(0));
     let owned = node(3, &drops);
     let address: *const Node = &*owned;
@@ -96,7 +96,7 @@ fn rejection_preserves_original_allocation() {
 
 #[test]
 fn callbacks_can_reenter_and_panic_without_losing_nodes() {
-    let queue = ConcurrentQueue::with_concurrency(4);
+    let queue = ConcurrentShardedQueue::with_concurrency(4);
     let drops = Arc::new(AtomicUsize::new(0));
     queue.push(node(0, &drops)).unwrap();
     queue
@@ -123,7 +123,7 @@ fn concurrent_ids(shards: usize, producers: usize, consumers: usize, close_early
     let per_producer = if cfg!(miri) { 8 } else { 2000 };
     let total = producers * per_producer;
     let drops = Arc::new(AtomicUsize::new(0));
-    let queue = Arc::new(ConcurrentQueue::with_concurrency(shards));
+    let queue = Arc::new(ConcurrentShardedQueue::with_concurrency(shards));
     let done = AtomicBool::new(false);
     let barrier = Barrier::new(producers + consumers + usize::from(close_early) * 2 + 1);
     thread::scope(|scope| {
@@ -240,7 +240,7 @@ fn concurrent_close_accounts_for_every_node() {
 
 #[test]
 fn drop_releases_consumed_nodes_from_multiple_threads() {
-    let queue = ConcurrentQueue::with_concurrency(8);
+    let queue = ConcurrentShardedQueue::with_concurrency(8);
     let drops = Arc::new(AtomicUsize::new(0));
     // Different threads use the shared shard-ID helper. Other tests may also
     // allocate IDs, so this makes no assumption about their exact shard mapping.

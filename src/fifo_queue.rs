@@ -4,7 +4,7 @@ use crossbeam_utils::{Backoff, CachePadded};
 use epoch::{Atomic, Guard, Owned, Shared};
 use std::sync::atomic::Ordering;
 
-/// An intrusive, unbounded multiple-producer/multiple-consumer FIFO queue.
+/// Internal, unbounded multiple-producer/multiple-consumer FIFO shard.
 ///
 /// Uses the [Michael–Scott algorithm][ms] with epoch reclamation and helping:
 /// any thread can advance a lagging tail after another thread links a node.
@@ -32,28 +32,7 @@ use std::sync::atomic::Ordering;
 /// Only the link-update algorithm is lock-free. Allocation, collector work,
 /// user accessors, and callbacks are not promised to be lock-free.
 ///
-/// # Example
-///
-/// ```
-/// use concurrent_intrusive_collections::{
-///     ConcurrentFifoQueue, PopError, SinglyLinked, epoch::{Atomic, Owned},
-/// };
-/// struct Job { next: Atomic<Self>, id: usize }
-/// // SAFETY: next is a private, fixed, non-owning field within each Job.
-/// unsafe impl SinglyLinked for Job {
-///     unsafe fn next(&self) -> &Atomic<Self> { &self.next }
-/// }
-/// let queue = ConcurrentFifoQueue::new();
-/// for id in 0..3 {
-///     queue.push(Owned::new(Job { next: Atomic::null(), id })).unwrap();
-/// }
-/// assert!(queue.close());
-/// for id in 0..3 {
-///     assert_eq!(queue.pop_with(|job| job.id), Ok(id));
-/// }
-/// assert_eq!(queue.pop_with(|_| ()), Err(PopError::Closed));
-/// ```
-pub struct ConcurrentFifoQueue<T: SinglyLinked + Send + Sync + 'static> {
+pub(crate) struct FifoQueue<T: SinglyLinked + Send + Sync + 'static> {
     // Null represents the initial, virtual dummy. Once non-null, neither
     // pointer becomes null again during the queue's lifetime.
     head: CachePadded<Head<T>>,
@@ -71,13 +50,13 @@ struct Head<T> {
     initial_next: Atomic<T>,
 }
 
-impl<T: SinglyLinked + Send + Sync + 'static> Default for ConcurrentFifoQueue<T> {
+impl<T: SinglyLinked + Send + Sync + 'static> Default for FifoQueue<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentFifoQueue<T> {
+impl<T: SinglyLinked + Send + Sync + 'static> FifoQueue<T> {
     /// Creates an empty queue without allocating a dummy `T`.
     ///
     /// # Panics
@@ -142,12 +121,7 @@ impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentFifoQueue<T> {
     /// Callbacks run while pinned, so keep them short. They may copy/clone data
     /// or return independently owned results, but may not return node borrows:
     ///
-    /// ```compile_fail
-    /// use concurrent_intrusive_collections::{ConcurrentFifoQueue, SinglyLinked};
-    /// fn escape<T: SinglyLinked + Send + Sync + 'static>(q: &ConcurrentFifoQueue<T>) -> &T {
-    ///     q.pop_with(|node| node).unwrap()
-    /// }
-    /// ```
+    #[cfg(test)]
     pub fn pop_with<R>(&self, f: impl FnOnce(&T) -> R) -> Result<R, PopError> {
         let guard = &epoch::pin();
         self.pop_with_guard(f, guard)
@@ -214,6 +188,7 @@ impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentFifoQueue<T> {
     /// Closure competes with enqueue on the terminal next link. Exactly one
     /// concurrent closer returns true. An overlapping push succeeds only if
     /// its link CAS precedes the successful close CAS.
+    #[cfg(test)]
     pub fn close(&self) -> bool {
         let guard = &epoch::pin();
         self.close_with_guard(guard)
@@ -245,6 +220,7 @@ impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentFifoQueue<T> {
     /// Returns whether the terminal next link has been marked closed.
     ///
     /// May help advance a lagging tail while concurrent producers make progress.
+    #[cfg(test)]
     pub fn is_closed(&self) -> bool {
         self.is_closed_with_guard(&epoch::pin())
     }
@@ -256,6 +232,7 @@ impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentFifoQueue<T> {
     /// Observes whether no unconsumed nodes remain, whether open or closed.
     ///
     /// Another operation can change this result immediately after it is read.
+    #[cfg(test)]
     pub fn is_empty(&self) -> bool {
         let guard = &epoch::pin();
         self.is_empty_with_guard(guard)
@@ -313,7 +290,7 @@ impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentFifoQueue<T> {
     }
 }
 
-impl<T: SinglyLinked + Send + Sync + 'static> Drop for ConcurrentFifoQueue<T> {
+impl<T: SinglyLinked + Send + Sync + 'static> Drop for FifoQueue<T> {
     fn drop(&mut self) {
         // SAFETY: no methods or callback borrows can still use this queue.
         let guard = unsafe { epoch::unprotected() };
@@ -336,7 +313,7 @@ impl<T: SinglyLinked + Send + Sync + 'static> Drop for ConcurrentFifoQueue<T> {
 }
 
 #[cfg(test)]
-mod tests {
+mod helping_tests {
     use super::*;
     use std::sync::{Arc, atomic::AtomicUsize};
 
@@ -369,7 +346,7 @@ mod tests {
 
     // Model an enqueuer paused immediately after its publication CAS, before
     // help_tail. Public operations must finish without that enqueuer resuming.
-    fn publish_without_advancing_tail(queue: &ConcurrentFifoQueue<Node>, node: Owned<Node>) {
+    fn publish_without_advancing_tail(queue: &FifoQueue<Node>, node: Owned<Node>) {
         let guard = &epoch::pin();
         let (_, link, next) = queue.tail_slot(guard);
         assert!(next.is_null());
@@ -383,7 +360,7 @@ mod tests {
     #[test]
     fn pop_helps_tail_past_virtual_dummy() {
         let drops = Arc::new(AtomicUsize::new(0));
-        let queue = ConcurrentFifoQueue::new();
+        let queue = FifoQueue::new();
         publish_without_advancing_tail(&queue, node(1, &drops));
         assert!(queue.tail.load(Ordering::Acquire, &epoch::pin()).is_null());
         assert_eq!(queue.pop_with(|node| node.id), Ok(1));
@@ -396,7 +373,7 @@ mod tests {
     #[test]
     fn push_and_close_help_tail_past_real_nodes() {
         let drops = Arc::new(AtomicUsize::new(0));
-        let queue = ConcurrentFifoQueue::new();
+        let queue = FifoQueue::new();
         queue.push(node(1, &drops)).unwrap();
         publish_without_advancing_tail(&queue, node(2, &drops));
         queue.push(node(3, &drops)).unwrap();
@@ -414,3 +391,6 @@ mod tests {
         assert_eq!(drops.load(Ordering::Relaxed), 4);
     }
 }
+
+#[cfg(test)]
+mod tests;

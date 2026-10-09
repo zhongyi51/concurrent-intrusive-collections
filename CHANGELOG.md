@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.0] - 2026-10-09
+
+- Breaking: rename `ConcurrentQueue` to `ConcurrentShardedQueue`, without an alias.
+- Breaking: remove the public `ConcurrentFifoQueue`; FIFO shards remain internal.
+- Keep only the sharded FIFO and LIFO collection APIs. Use one queue shard when
+  global FIFO is required. Move FIFO history/lifecycle tests into the private module.
+- Benchmark the public queue at 1, 8, and 32 shards; old recorded reports retain
+  their historical type names and direct Michael¨CScott baseline.
+
 ## [0.1.0] - 2026-10-09
 
 Initial release.

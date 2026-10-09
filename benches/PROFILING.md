@@ -1,5 +1,10 @@
 # Allocation and CPU profiling: 2026-10-09
 
+> Historical measurements below use the 0.1.0 API names. In 0.2.0 the public
+> queue is `ConcurrentShardedQueue`; the FIFO shard is private. Current benchmarks
+> compare the public queue at 1, 8, and 32 shards, so new results do not include
+> the old direct `ms` baseline.
+
 The library changes are limited to `src/fifo_queue.rs`: co-locate the initial
 dummy link with head, hint inlining of the shard pop routine, and skip loading
 tail when a validated head has no successor. There is no node pool, allocation

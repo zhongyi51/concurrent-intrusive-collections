@@ -1,6 +1,6 @@
 # Ownership, ordering, and memory safety
 
-This document records the implementation invariants for version 0.1.0. It is an
+This document records the implementation invariants for version 0.2.0. It is an
 audit aid, not a formal proof or a substitute for the unsafe trait contracts.
 
 ## Node contract
@@ -74,8 +74,8 @@ This is intentional retention, separate from delayed epoch reclamation.
 | Type | Ordering | Successful-operation linearization | Close |
 | --- | --- | --- | --- |
 | `ConcurrentShardedStack` | LIFO within each shard | Successful shard-head CAS | Per-shard tagged-head RMW |
-| `ConcurrentQueue` | FIFO within each shard | Corresponding FIFO shard operation | Per-shard terminal-link CAS |
-| `ConcurrentFifoQueue` | Global FIFO | Enqueue: terminal-link CAS; dequeue: head CAS | One terminal-link CAS |
+| `ConcurrentShardedQueue` | FIFO within each shard | Corresponding FIFO shard operation | Per-shard terminal-link CAS |
+| Internal FIFO shard | Global FIFO | Enqueue: terminal-link CAS; dequeue: head CAS | One terminal-link CAS |
 
 Sharded collections choose a stable per-thread shard. Numeric thread IDs may
 collide or wrap; only locality depends on their uniqueness, never safety.

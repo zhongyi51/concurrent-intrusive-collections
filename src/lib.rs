@@ -3,13 +3,12 @@
 //! Nodes implement [`SinglyLinked`] and, optionally, [`DoublyLinked`]. Links
 //! point directly to complete nodes, so there are no adapters or link-to-node
 //! conversions. The default `std` feature enables the sharded stack, sharded
-//! `ConcurrentQueue`, and globally ordered `ConcurrentFifoQueue`.
+//! `ConcurrentShardedQueue`.
 //! Disabling it leaves the link traits and the `alloc`-enabled [`epoch`] API.
 //!
 //! # Choosing a collection
 //!
-//! - `ConcurrentQueue`: per-shard FIFO with local enqueue and XOR probing.
-//! - `ConcurrentFifoQueue`: globally linearizable FIFO and atomic close.
+//! - `ConcurrentShardedQueue`: per-shard FIFO with local enqueue and XOR probing.
 //! - `ConcurrentShardedStack`: per-shard LIFO with local push and XOR probing.
 //!
 //! Collections take ownership through `epoch::Owned<T>` and return results from
@@ -41,9 +40,7 @@ mod stack;
 #[cfg(feature = "std")]
 pub use error::{PopError, PushError};
 #[cfg(feature = "std")]
-pub use fifo_queue::ConcurrentFifoQueue;
-#[cfg(feature = "std")]
-pub use queue::ConcurrentQueue;
+pub use queue::ConcurrentShardedQueue;
 #[cfg(feature = "std")]
 pub use stack::ConcurrentShardedStack;
 
