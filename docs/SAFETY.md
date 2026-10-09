@@ -100,6 +100,11 @@ Flushing the collector is not waiting for all destructors to finish.
 
 ## Evidence and limits
 
+The dependency minimums exclude the affected releases in
+[RUSTSEC-2026-0204](https://rustsec.org/advisories/RUSTSEC-2026-0204.html)
+and [RUSTSEC-2022-0041](https://rustsec.org/advisories/RUSTSEC-2022-0041.html).
+Keep reviewing upstream advisories when updating dependencies or releasing.
+
 Tests cover exact ID sets, per-producer order, rejected ownership, stale readers,
 paused publication/tail helping, concurrent close, callback panic/reentrancy,
 dummy retention, and complete node destruction. A bounded-history checker tries

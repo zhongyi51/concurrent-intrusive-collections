@@ -11,6 +11,7 @@ Initial release.
 - `ConcurrentFifoQueue`: globally linearizable Michael–Scott FIFO and atomic close.
 - `Owned<T>` ownership transfer, shared-borrow callbacks, and epoch reclamation.
 - Rust 1.85 minimum; default `std` collections and allocator-backed `no_std` traits.
+- Dependency floors exclude RUSTSEC-2026-0204 and RUSTSEC-2022-0041 affected versions.
 - Tests for unique IDs, FIFO histories, races, callbacks, and exact node destruction;
   benchmarks and allocation/CPU profiling with recorded tradeoffs.
 

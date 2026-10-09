@@ -26,8 +26,8 @@ default = ["std"]
 std = ["crossbeam-epoch/std", "dep:crossbeam-utils", "crossbeam-utils/std"]
 
 [dependencies]
-crossbeam-epoch = { version = "0.9", default-features = false, features = ["alloc"] }
-crossbeam-utils = { version = "0.8", default-features = false, optional = true }
+crossbeam-epoch = { version = "0.9.20", default-features = false, features = ["alloc"] }
+crossbeam-utils = { version = "0.8.7", default-features = false, optional = true }
 
 [[bench]]
 name = "queue"
