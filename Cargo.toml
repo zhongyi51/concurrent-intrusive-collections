@@ -1,0 +1,44 @@
+[package]
+name = "concurrent-intrusive-collections"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Intrusive concurrent collections with Crossbeam epoch reclamation."
+license = "MIT"
+readme = "README.md"
+publish = ["crates-io"]
+repository = "https://github.com/zhongyi51/concurrent-intrusive-collections"
+documentation = "https://docs.rs/concurrent-intrusive-collections"
+keywords = ["concurrent", "intrusive", "lock-free", "epoch", "queue"]
+categories = ["concurrency", "data-structures", "no-std"]
+include = [
+    "/src/**", "/tests/**", "/examples/**", "/benches/*.rs",
+    "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE", "/CHANGELOG.md",
+    "/docs/SAFETY.md",
+]
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-apple-darwin"]
+
+[features]
+default = ["std"]
+std = ["crossbeam-epoch/std", "dep:crossbeam-utils", "crossbeam-utils/std"]
+
+[dependencies]
+crossbeam-epoch = { version = "0.9", default-features = false, features = ["alloc"] }
+crossbeam-utils = { version = "0.8", default-features = false, optional = true }
+
+[[bench]]
+name = "queue"
+harness = false
+required-features = ["std"]
+
+[[example]]
+name = "work_queue"
+required-features = ["std"]
+
+[[bench]]
+name = "profile"
+harness = false
+required-features = ["std"]

@@ -1,0 +1,44 @@
+profile-1c4ed9737dbeb66c.exe: 5011 non-null sampled stacks
+Leaf
+   3862  77.07% concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    926  18.48% crossbeam_epoch::default::with_handle::hc289df33c4c08032 (.llvm.14028320430493110863)
+    106   2.12% profile::empty_batch
+     51   1.02% profile-1c4ed9737dbeb66c.exe:0xa230
+     34   0.68% profile-1c4ed9737dbeb66c.exe:0xa2a0
+      6   0.12% crossbeam_epoch::internal::Global::try_advance::h83746689aab159ee (.llvm.4148519323384438248)
+      4   0.08% profile-1c4ed9737dbeb66c.exe:0xa2b3
+      2   0.04% 0x7ffa454acac0
+      2   0.04% KeClockInterruptNotify
+      1   0.02% fun_167690
+      1   0.02% fun_886cb8
+      1   0.02% fun_6bd540
+      1   0.02% fun_267820
+      1   0.02% NtWaitForSingleObject
+      1   0.02% fun_bed7c
+Inclusive
+   5003  99.84% BaseThreadInitThunk
+   5003  99.84% RtlUserThreadStart
+   5003  99.84% __scrt_common_main_seh
+   5002  99.82% std::sys::backtrace::__rust_begin_short_backtrace<void (*)(),tuple$<> >
+   5002  99.82% std::rt::lang_start_internal::hfcc0413f942a5007
+   5002  99.82% main
+   5002  99.82% profile::empty_batch
+   5002  99.82% profile::main::h4d19604326ccd03b
+   5002  99.82% core::ops::function::FnOnce::call_once$u7b$$u7b$vtable.shim$u7d$$u7d$::hb6bdaeca6f88df85 (.llvm.5659372157368242399)
+   4896  97.71% concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    972  19.40% crossbeam_epoch::default::with_handle::hc289df33c4c08032 (.llvm.14028320430493110863)
+     51   1.02% profile-1c4ed9737dbeb66c.exe:0xa230
+     34   0.68% profile-1c4ed9737dbeb66c.exe:0xa2a0
+      6   0.12% fun_8be88
+      6   0.12% LdrInitializeThunk
+Top leaf instruction addresses (module-relative)
+    429 0x7868 crossbeam_epoch::default::with_handle::hc289df33c4c08032 (.llvm.14028320430493110863)
+    416 0x7c61 concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    373 0x7be0 concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    330 0x7c57 concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    321 0x7c18 concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    292 0x7bf0 concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    244 0x7c4f concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    237 0x7c10 concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    229 0x7be8 concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    208 0x7c49 concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc

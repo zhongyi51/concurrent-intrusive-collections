@@ -1,0 +1,44 @@
+profile-1c4ed9737dbeb66c.exe: 5010 non-null sampled stacks
+Leaf
+    762  15.21% fun_26e50
+    666  13.29% concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::push::h9bb73364cb9e9c7b
+    600  11.98% RtlFreeHeap
+    435   8.68% concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::pop_with_guard::h8f8ca2f0efa0bd0b
+    426   8.50% crossbeam_epoch::default::with_handle<crossbeam_epoch::default::pin::closure_env$0,crossbeam_epoch::guard::Guard>
+    418   8.34% crossbeam_epoch::default::with_handle::hc289df33c4c08032 (.llvm.11872203751636390269)
+    328   6.55% _$LT$crossbeam_epoch..atomic..Owned$LT$T$GT$$u20$as$u20$core..ops..drop..Drop$GT$::drop::h4a27a0be8b2efd94
+    326   6.51% profile::roundtrip_batch
+    300   5.99% crossbeam_epoch::internal::Local::defer::hae1a90342d394d0f
+    119   2.38% concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::h7e053467b92fc5e5
+     80   1.60% fun_2677e
+     80   1.60% RtlAllocateHeap
+     53   1.06% profile-1c4ed9737dbeb66c.exe:0xa820
+     38   0.76% fun_11130
+     38   0.76% crossbeam_epoch::internal::Global::collect::h70ab214a2a1a12e9
+Inclusive
+   5003  99.86% RtlUserThreadStart
+   5002  99.84% __scrt_common_main_seh
+   5002  99.84% BaseThreadInitThunk
+   5001  99.82% profile::main::h4d19604326ccd03b
+   5001  99.82% main
+   5001  99.82% std::sys::backtrace::__rust_begin_short_backtrace<void (*)(),tuple$<> >
+   5001  99.82% core::ops::function::FnOnce::call_once$u7b$$u7b$vtable.shim$u7d$$u7d$::hb6bdaeca6f88df85 (.llvm.11872203751636390269)
+   5001  99.82% std::rt::lang_start_internal::hfcc0413f942a5007
+   5001  99.82% profile::roundtrip_batch
+   2122  42.36% concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::push::h9bb73364cb9e9c7b
+   1455  29.04% crossbeam_epoch::default::with_handle<crossbeam_epoch::default::pin::closure_env$0,crossbeam_epoch::guard::Guard>
+   1420  28.34% concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::h7e053467b92fc5e5
+   1110  22.16% profile::node::hd9c9f1ddda005225
+   1024  20.44% RtlAllocateHeap
+   1014  20.24% crossbeam_epoch::internal::Global::collect::h70ab214a2a1a12e9
+Top leaf instruction addresses (module-relative)
+    347 0x7a68 crossbeam_epoch::default::with_handle::hc289df33c4c08032 (.llvm.11872203751636390269)
+    345 0x8f88 crossbeam_epoch::default::with_handle<crossbeam_epoch::default::pin::closure_env$0,crossbeam_epoch::guard::Guard>
+    321 0x274bd fun_26e50
+    293 0x1cd63 RtlFreeHeap
+    284 0x9208 concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::pop_with_guard::h8f8ca2f0efa0bd0b
+    282 0x2090 _$LT$crossbeam_epoch..atomic..Owned$LT$T$GT$$u20$as$u20$core..ops..drop..Drop$GT$::drop::h4a27a0be8b2efd94
+    278 0x9661 concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::push::h9bb73364cb9e9c7b
+    253 0x96c1 concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::push::h9bb73364cb9e9c7b
+    176 0x22ec profile::roundtrip_batch
+    126 0xab9d crossbeam_epoch::internal::Local::defer::hae1a90342d394d0f

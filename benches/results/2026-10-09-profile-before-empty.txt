@@ -1,0 +1,44 @@
+profile-1c4ed9737dbeb66c.exe: 5018 non-null sampled stacks
+Leaf
+   2915  58.09% concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::pop_with_guard::h72540ab1ad903cd4
+   1482  29.53% concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    490   9.76% crossbeam_epoch::default::with_handle::hc289df33c4c08032 (.llvm.11872203751636390269)
+     34   0.68% profile::empty_batch
+     32   0.64% profile-1c4ed9737dbeb66c.exe:0xa820
+     13   0.26% profile-1c4ed9737dbeb66c.exe:0xa890
+      7   0.14% crossbeam_epoch::internal::Global::try_advance::h83746689aab159ee (.llvm.4148519323384438248)
+      3   0.06% fun_e34a0
+      2   0.04% 0x7ffa454acac0
+      2   0.04% profile-1c4ed9737dbeb66c.exe:0xa8a3
+      2   0.04% fun_2b6750
+      2   0.04% fun_6b6540
+      2   0.04% fun_f9dc0
+      2   0.04% fun_25dcc0
+      1   0.02% fun_11bb20
+Inclusive
+   5011  99.86% __scrt_common_main_seh
+   5011  99.86% RtlUserThreadStart
+   5011  99.86% BaseThreadInitThunk
+   5010  99.84% profile::main::h4d19604326ccd03b
+   5010  99.84% profile::empty_batch
+   5010  99.84% main
+   5010  99.84% std::sys::backtrace::__rust_begin_short_backtrace<void (*)(),tuple$<> >
+   5010  99.84% core::ops::function::FnOnce::call_once$u7b$$u7b$vtable.shim$u7d$$u7d$::hb6bdaeca6f88df85 (.llvm.11872203751636390269)
+   5010  99.84% std::rt::lang_start_internal::hfcc0413f942a5007
+   4975  99.14% concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+   2936  58.51% concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::pop_with_guard::h72540ab1ad903cd4
+    514  10.24% crossbeam_epoch::default::with_handle::hc289df33c4c08032 (.llvm.11872203751636390269)
+     33   0.66% profile-1c4ed9737dbeb66c.exe:0xa820
+     13   0.26% profile-1c4ed9737dbeb66c.exe:0xa890
+      8   0.16% fun_2238b0
+Top leaf instruction addresses (module-relative)
+    522 0x9300 concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::pop_with_guard::h72540ab1ad903cd4
+    472 0x930f concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::pop_with_guard::h72540ab1ad903cd4
+    466 0x9341 concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::pop_with_guard::h72540ab1ad903cd4
+    323 0x9363 concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::pop_with_guard::h72540ab1ad903cd4
+    301 0x7dfd concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    295 0x7e1a concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    252 0x7e12 concurrent_intrusive_collections::queue::ConcurrentQueue$LT$T$GT$::pop_with::hd073116e9b77c4cc
+    244 0x7a68 crossbeam_epoch::default::with_handle::hc289df33c4c08032 (.llvm.11872203751636390269)
+    235 0x943b concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::pop_with_guard::h72540ab1ad903cd4
+    232 0x9356 concurrent_intrusive_collections::fifo_queue::ConcurrentFifoQueue$LT$T$GT$::pop_with_guard::h72540ab1ad903cd4
