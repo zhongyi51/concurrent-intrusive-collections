@@ -13,7 +13,7 @@ use std::sync::atomic::Ordering;
 /// then `local ^ 1`, `local ^ 2`, and so on. Ordering is LIFO within each shard,
 /// not across the entire collection. Shards may be shared by multiple threads.
 ///
-/// The stack owns complete nodes supplied as [`Owned<T>`], without allocating
+/// The stack owns complete nodes supplied as [`Box<T>`], without allocating
 /// a wrapper node. All operations use Crossbeam's default collector internally.
 /// A successful [`pop_with`](Self::pop_with) borrows the removed node only for
 /// its callback, then epoch GC eventually destroys it. It never returns an
@@ -27,7 +27,7 @@ use std::sync::atomic::Ordering;
 ///
 /// ```
 /// use concurrent_intrusive_collections::{
-///     ConcurrentShardedStack, PopError, SinglyLinked, epoch::{Atomic, Owned},
+///     ConcurrentShardedStack, PopError, SinglyLinked, AtomicLink as Atomic,
 /// };
 ///
 /// struct Job {
@@ -41,7 +41,7 @@ use std::sync::atomic::Ordering;
 /// }
 ///
 /// let stack = ConcurrentShardedStack::with_concurrency(4);
-/// stack.push(Owned::new(Job {
+/// stack.push(Box::new(Job {
 ///     next: Atomic::null(),
 ///     name: "compile".into(),
 /// })).unwrap();
@@ -96,12 +96,12 @@ impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentShardedStack<T> {
     /// Transfers ownership of a node into this thread's shard.
     ///
     /// On rejection, the error returns the same allocation with a null forward
-    /// link. Incoming pointer tags are discarded; the stack owns the head tag.
+    /// link. Pointer tags are internal; the stack owns the head tag.
     /// The node's previous forward-link contents are overwritten, not reclaimed.
-    pub fn push(&self, node: Owned<T>) -> Result<(), PushError<T>> {
+    pub fn push(&self, node: Box<T>) -> Result<(), PushError<T>> {
         let shard = &self.shards[self.current_shard_index()];
         let guard = &epoch::pin();
-        let mut node = node.with_tag(0);
+        let mut node = Owned::<T>::from(node);
         let backoff = Backoff::new();
 
         loop {
@@ -110,7 +110,7 @@ impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentShardedStack<T> {
             let next = unsafe { node.next() };
             if head.tag() == CLOSED_TAG {
                 next.store(Shared::null(), Ordering::Relaxed);
-                return Err(PushError::Closed(node));
+                return Err(PushError::Closed(node.into_box()));
             }
             next.store(head, Ordering::Relaxed);
 
@@ -184,7 +184,7 @@ impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentShardedStack<T> {
                 ) {
                     Ok(_) => {
                         // SAFETY: exactly this CAS winner retires the complete
-                        // allocation originally transferred via Owned<T>.
+                        // allocation originally transferred via Box<T>.
                         // New traversals cannot reach it; old readers and the
                         // callback remain protected by their guards. T: Send
                         // + 'static permits deferred destruction on any thread.
@@ -226,6 +226,16 @@ impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentShardedStack<T> {
         self.shards
             .iter()
             .all(|shard| shard.load(Ordering::Acquire, guard).tag() == CLOSED_TAG)
+    }
+
+    /// Returns whether every shard was observed empty during a scan.
+    ///
+    /// This is not a simultaneous snapshot; concurrent pushes can invalidate it.
+    pub fn is_empty(&self) -> bool {
+        let guard = &epoch::pin();
+        self.shards
+            .iter()
+            .all(|shard| shard.load(Ordering::Acquire, guard).is_null())
     }
 
     /// Returns the number of shards.

@@ -11,7 +11,7 @@
 //! - `ConcurrentShardedQueue`: per-shard FIFO with local enqueue and XOR probing.
 //! - `ConcurrentShardedStack`: per-shard LIFO with local push and XOR probing.
 //!
-//! Collections take ownership through `epoch::Owned<T>` and return results from
+//! Collections take ownership through `Box<T>` and return results from
 //! shared-borrow callbacks. They do not return removed nodes for immediate reuse.
 //! Queue shards retain their last consumed node as a dummy until the next pop
 //! or destruction. See each collection for ordering and reclamation semantics.
@@ -26,6 +26,12 @@
 compile_error!("concurrent-intrusive-collections requires pointer-width atomics");
 
 pub use crossbeam_epoch as epoch;
+
+/// An atomic forward/backward link stored privately in an intrusive node.
+///
+/// This is Crossbeam's atomic pointer type, reexported for implementing the link
+/// traits. Link access must follow the owning collection's safety protocol.
+pub use crossbeam_epoch::Atomic as AtomicLink;
 
 #[cfg(feature = "std")]
 mod error;
@@ -70,7 +76,7 @@ pub unsafe trait SinglyLinked: Sized {
     /// All uses of the returned atomic must follow the owning collection's
     /// synchronization, ownership, and reclamation protocol. Loading a pointer
     /// does not by itself make that pointer valid to dereference.
-    unsafe fn next(&self) -> &epoch::Atomic<Self>;
+    unsafe fn next(&self) -> &AtomicLink<Self>;
 }
 
 /// A node that also contains an atomic backward link.
@@ -90,5 +96,5 @@ pub unsafe trait DoublyLinked: SinglyLinked {
     ///
     /// All uses of the returned atomic must follow the owning collection's
     /// synchronization, ownership, and reclamation protocol.
-    unsafe fn prev(&self) -> &epoch::Atomic<Self>;
+    unsafe fn prev(&self) -> &AtomicLink<Self>;
 }

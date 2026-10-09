@@ -2,8 +2,7 @@
 mod common;
 use common::collect_until;
 use concurrent_intrusive_collections::{
-    ConcurrentShardedQueue, PopError, SinglyLinked,
-    epoch::{Atomic, Owned},
+    AtomicLink as Atomic, ConcurrentShardedQueue, PopError, SinglyLinked,
 };
 use std::sync::{
     Arc, Barrier,
@@ -28,8 +27,8 @@ impl Drop for Node {
         self.drops.fetch_add(1, Ordering::Relaxed);
     }
 }
-fn node(id: usize, drops: &Arc<AtomicUsize>) -> Owned<Node> {
-    Owned::new(Node {
+fn node(id: usize, drops: &Arc<AtomicUsize>) -> Box<Node> {
+    Box::new(Node {
         next: Atomic::null(),
         id,
         drops: Arc::clone(drops),
@@ -50,7 +49,7 @@ fn constructors_and_single_thread_fifo() {
     assert!(queue.is_empty());
     let drops = Arc::new(AtomicUsize::new(0));
     for id in 0..10 {
-        queue.push(node(id, &drops).with_tag(1)).unwrap();
+        queue.push(node(id, &drops)).unwrap();
     }
     for id in 0..10 {
         assert_eq!(queue.pop_with(|node| node.id), Ok(id));

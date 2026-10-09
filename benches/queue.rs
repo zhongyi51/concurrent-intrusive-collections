@@ -1,7 +1,7 @@
 //! Paired, dependency-free queue benchmark. See benches/README.md for methodology.
 use concurrent_intrusive_collections::{
     ConcurrentShardedQueue, PopError, SinglyLinked,
-    epoch::{self, Atomic, Owned},
+    epoch::{self, Atomic},
 };
 use crossbeam_utils::CachePadded;
 use std::hint::black_box;
@@ -34,8 +34,8 @@ impl Drop for Node {
         DROPS[self.producer].fetch_add(1, Ordering::Relaxed);
     }
 }
-fn node(id: usize, producer: usize) -> Owned<Node> {
-    Owned::new(Node {
+fn node(id: usize, producer: usize) -> Box<Node> {
+    Box::new(Node {
         next: Atomic::null(),
         id,
         producer,
@@ -43,11 +43,11 @@ fn node(id: usize, producer: usize) -> Owned<Node> {
 }
 
 trait Queue: Sync {
-    fn push(&self, node: Owned<Node>);
+    fn push(&self, node: Box<Node>);
     fn pop(&self) -> Result<usize, PopError>;
 }
 impl Queue for ConcurrentShardedQueue<Node> {
-    fn push(&self, node: Owned<Node>) {
+    fn push(&self, node: Box<Node>) {
         self.push(node).unwrap();
     }
     fn pop(&self) -> Result<usize, PopError> {

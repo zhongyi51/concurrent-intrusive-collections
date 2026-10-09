@@ -170,3 +170,14 @@ Release and Rust 1.85 tests pass (47 runtime + six doctests), as does strict Cli
 All 47 runtime tests also pass Miri with the documented Crossbeam configuration
 (`-Zmiri-tree-borrows -Zmiri-ignore-leaks`); the existing provenance and collector
 limitations still apply.
+
+## Box API validation (0.3.0)
+
+Re-ran `cargo bench --locked --bench profile` after replacing public Owned inputs
+with Box. See [raw counts](results/2026-10-09-box-api-alloc.csv). Preallocated push
+performed **zero extra allocations for 8,192 nodes**, for both the sharded queue
+and stack. Warm empty operations, state queries, and a large callback capture
+also allocated zero times. Pop still incurs batched epoch metadata allocations,
+as in the standalone EBR baseline. This checks allocation behavior, not a fresh
+throughput comparison. Conversion preserves the complete node address, also
+covered by ownership/rejection tests.

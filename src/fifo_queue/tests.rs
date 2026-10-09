@@ -5,7 +5,7 @@ mod common;
 use super::FifoQueue;
 use crate::{
     PopError, SinglyLinked,
-    epoch::{self, Atomic, Owned, Shared},
+    epoch::{self, Atomic, Shared},
 };
 use common::collect_until;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -72,7 +72,7 @@ fn fifo_across_distinct_producer_threads() {
     for id in 0..8 {
         let (queue, drops) = (Arc::clone(&queue), Arc::clone(&drops));
         // Join imposes an unambiguous order across different producers.
-        thread::spawn(move || queue.push(Owned::new(Node::new(id, &drops))).unwrap())
+        thread::spawn(move || queue.push(Box::new(Node::new(id, &drops))).unwrap())
             .join()
             .unwrap();
     }
@@ -87,7 +87,7 @@ fn fifo_across_distinct_producer_threads() {
 }
 
 #[test]
-fn incoming_links_and_tags_are_overwritten_and_allocation_is_preserved() {
+fn incoming_link_is_overwritten_and_allocation_is_preserved() {
     let drops = Arc::new(AtomicUsize::new(0));
     let unrelated = Node::new(99, &drops);
     let node = Box::new(Node::new(7, &drops));
@@ -95,7 +95,7 @@ fn incoming_links_and_tags_are_overwritten_and_allocation_is_preserved() {
     node.next
         .store(Shared::from(&unrelated as *const Node), Ordering::Relaxed);
     let queue = FifoQueue::new();
-    queue.push(Owned::<Node>::from(node).with_tag(1)).unwrap();
+    queue.push(node).unwrap();
     assert!(!queue.is_closed());
     queue
         .pop_with(|node| {
@@ -114,7 +114,7 @@ fn closing_virtual_dummy_returns_original_rejected_ownership() {
     let drops = Arc::new(AtomicUsize::new(0));
     let queue = FifoQueue::new();
     assert!(queue.close());
-    let node = Owned::new(Node::new(4, &drops));
+    let node = Box::new(Node::new(4, &drops));
     let address: *const Node = &*node;
     let error = queue.push(node).unwrap_err();
     assert_eq!(error.to_string(), "collection is closed");
@@ -134,7 +134,7 @@ fn close_preserves_fifo_and_drains_to_closed() {
     let drops = Arc::new(AtomicUsize::new(0));
     let queue = FifoQueue::new();
     for id in 0..10 {
-        queue.push(Owned::new(Node::new(id, &drops))).unwrap();
+        queue.push(Box::new(Node::new(id, &drops))).unwrap();
     }
     assert!(queue.close());
     assert!(!queue.close());
@@ -153,14 +153,14 @@ fn last_popped_node_is_retained_as_dummy() {
     let first_drops = Arc::new(AtomicUsize::new(0));
     let second_drops = Arc::new(AtomicUsize::new(0));
     let queue = FifoQueue::new();
-    queue.push(Owned::new(Node::new(1, &first_drops))).unwrap();
+    queue.push(Box::new(Node::new(1, &first_drops))).unwrap();
     assert_eq!(queue.pop_with(|node| node.id), Ok(1));
     for _ in 0..16 {
         epoch::pin().flush();
     }
     assert_eq!(first_drops.load(Ordering::Relaxed), 0);
     assert!(queue.is_empty());
-    queue.push(Owned::new(Node::new(2, &second_drops))).unwrap();
+    queue.push(Box::new(Node::new(2, &second_drops))).unwrap();
     assert_eq!(
         first_drops.load(Ordering::Relaxed),
         0,
@@ -180,7 +180,7 @@ fn drop_before_any_dequeue_reclaims_the_entire_chain() {
     let drops = Arc::new(AtomicUsize::new(0));
     let queue = FifoQueue::new();
     for id in 0..10 {
-        queue.push(Owned::new(Node::new(id, &drops))).unwrap();
+        queue.push(Box::new(Node::new(id, &drops))).unwrap();
     }
     queue.close();
     drop(queue);
@@ -192,7 +192,7 @@ fn partial_drain_and_callback_panic_do_not_duplicate_or_leak_nodes() {
     let drops = Arc::new(AtomicUsize::new(0));
     let queue = FifoQueue::new();
     for id in 0..10 {
-        queue.push(Owned::new(Node::new(id, &drops))).unwrap();
+        queue.push(Box::new(Node::new(id, &drops))).unwrap();
     }
     let panic = catch_unwind(AssertUnwindSafe(|| {
         let _ = queue.pop_with(|node| {
@@ -211,10 +211,10 @@ fn reentrant_callback_is_protected_when_its_node_is_retired() {
     let first_drops = Arc::new(AtomicUsize::new(0));
     let second_drops = Arc::new(AtomicUsize::new(0));
     let queue = FifoQueue::new();
-    queue.push(Owned::new(Node::new(1, &first_drops))).unwrap();
+    queue.push(Box::new(Node::new(1, &first_drops))).unwrap();
     queue
         .pop_with(|first| {
-            queue.push(Owned::new(Node::new(2, &second_drops))).unwrap();
+            queue.push(Box::new(Node::new(2, &second_drops))).unwrap();
             assert_eq!(queue.pop_with(|node| node.id), Ok(2));
             for _ in 0..16 {
                 epoch::pin().flush();
@@ -234,12 +234,12 @@ fn reentrant_callback_is_protected_when_its_node_is_retired() {
 fn queue_can_move_and_cycle_after_the_first_node_is_reclaimed() {
     let drops = Arc::new(AtomicUsize::new(0));
     let queue = FifoQueue::new();
-    queue.push(Owned::new(Node::new(0, &drops))).unwrap();
+    queue.push(Box::new(Node::new(0, &drops))).unwrap();
     assert_eq!(queue.pop_with(|node| node.id), Ok(0));
     // Moving the collection must not invalidate its virtual initial dummy.
     let queue = Box::new(queue);
     for id in 1..8 {
-        queue.push(Owned::new(Node::new(id, &drops))).unwrap();
+        queue.push(Box::new(Node::new(id, &drops))).unwrap();
         assert_eq!(queue.pop_with(|node| node.id), Ok(id));
         collect_until(&drops, id);
         assert!(queue.is_empty());
@@ -264,7 +264,7 @@ fn concurrent_unique_ids(producers: usize, consumers: usize, close: bool) {
             start.wait();
             for offset in 0..per_producer {
                 queue
-                    .push(Owned::new(Node::new(
+                    .push(Box::new(Node::new(
                         producer * per_producer + offset,
                         &drops,
                     )))
@@ -361,7 +361,7 @@ fn close_racing_push_and_pop_has_one_winner_and_accounts_for_every_node() {
     let mut pushers = Vec::new();
     let mut poppers = Vec::new();
     let mut closers = Vec::new();
-    queue.push(Owned::new(Node::new(total, &drops))).unwrap();
+    queue.push(Box::new(Node::new(total, &drops))).unwrap();
     for producer in 0..producers {
         let (queue, start, drops) = (Arc::clone(&queue), Arc::clone(&start), Arc::clone(&drops));
         pushers.push(thread::spawn(move || {
@@ -370,7 +370,7 @@ fn close_racing_push_and_pop_has_one_winner_and_accounts_for_every_node() {
             start.wait();
             for offset in 0..per_producer {
                 let id = producer * per_producer + offset;
-                match queue.push(Owned::new(Node::new(id, &drops))) {
+                match queue.push(Box::new(Node::new(id, &drops))) {
                     Ok(()) => accepted.push(id),
                     Err(error) => {
                         let node = error.into_inner();
@@ -471,7 +471,7 @@ fn stale_head_snapshot_is_protected_and_retried() {
     );
     let queue = Arc::new(FifoQueue::new());
     let make = |id| {
-        Owned::new(PausedNode {
+        Box::new(PausedNode {
             next: Atomic::null(),
             id,
             armed: Arc::clone(&armed),
@@ -513,7 +513,7 @@ fn close_rejects_a_paused_enqueuer_without_losing_ownership() {
     );
     let queue = Arc::new(FifoQueue::new());
     let make = |id| {
-        Owned::new(PausedNode {
+        Box::new(PausedNode {
             next: Atomic::null(),
             id,
             armed: Arc::clone(&armed),
@@ -636,7 +636,7 @@ fn concurrent_histories_match_a_linearizable_fifo_model() {
                         let id = round * 2 + worker;
                         let push = record(clock, || Operation::Push {
                             id,
-                            accepted: queue.push(Owned::new(Node::new(id, drops))).is_ok(),
+                            accepted: queue.push(Box::new(Node::new(id, drops))).is_ok(),
                         });
                         thread::yield_now();
                         vec![

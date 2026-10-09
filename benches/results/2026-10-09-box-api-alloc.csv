@@ -1,0 +1,16 @@
+phase,operations,alloc_calls,requested_bytes,dealloc_calls,realloc_calls,allocation_sizes
+first-pin,1,3,5016,0,0,2072:1;640:1;2304:1
+construct-queue-1,1,1,256,0,0,256:1
+construct-queue-32,1,1,8192,0,0,8192:1
+construct-stack-32,1,1,4096,0,0,4096:1
+warm-empty-queue-32,8192,0,0,0,0,
+warm-empty-queue-1,8192,0,0,0,0,
+warm-empty-stack-32,8192,0,0,0,0,
+state-queries-queue-32,16384,0,0,0,0,
+preallocated-push-queue-32,8192,0,0,0,0,
+pop-queue-32,8192,129,267288,8128,0,2072:129
+bare-ebr-defer-destroy,8192,128,265216,0,0,2072:128
+large-callback-capture,1,0,0,0,0,
+preallocated-push-stack-32,8192,0,0,80,0,
+pop-stack-32,8192,130,269360,8128,0,2072:130
+close-queue-32,1,0,0,0,0,

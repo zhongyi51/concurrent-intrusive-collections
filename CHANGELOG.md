@@ -1,13 +1,22 @@
 # Changelog
 
+## [0.3.0] - 2026-10-09
+
+- Breaking: `push` accepts `Box<T>` and `PushError::into_inner` returns `Box<T>`.
+  Crossbeam `Owned` conversion is internal and preserves the original allocation.
+- Reexport `AtomicLink` for the minimal next/prev traits, without requiring an
+  epoch ownership wrapper at call sites. Add a matching stack `is_empty` query.
+- Keep only `ConcurrentShardedQueue` and `ConcurrentShardedStack` public.
+- Normalize release metadata to UTF-8 and check its encoding in CI.
+
 ## [0.2.0] - 2026-10-09
 
 - Breaking: rename `ConcurrentQueue` to `ConcurrentShardedQueue`, without an alias.
-- Breaking: remove the public `ConcurrentFifoQueue`; FIFO shards remain internal.
-- Keep only the sharded FIFO and LIFO collection APIs. Use one queue shard when
-  global FIFO is required. Move FIFO history/lifecycle tests into the private module.
-- Benchmark the public queue at 1, 8, and 32 shards; old recorded reports retain
-  their historical type names and direct Michael¨CScott baseline.
+- Breaking: hide the strict FIFO implementation. Its history/lifetime tests remain.
+- Update benchmarks to compare public queue configurations at 1, 8 and 32 shards.
+- A locale-encoded character in the changelog prevented automated GitHub release
+  notes; the compiled library and its tests were unaffected. Corrected in 0.3.0.
+
 
 ## [0.1.0] - 2026-10-09
 

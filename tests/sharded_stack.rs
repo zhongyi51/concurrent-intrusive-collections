@@ -5,7 +5,7 @@ use common::collect_until;
 
 use concurrent_intrusive_collections::{
     ConcurrentShardedStack, DoublyLinked, PopError, SinglyLinked,
-    epoch::{self, Atomic, Owned, Shared},
+    epoch::{self, Atomic, Shared},
 };
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -50,6 +50,7 @@ fn constructors_and_auto_traits() {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<ConcurrentShardedStack<Node>>();
     let stack = ConcurrentShardedStack::<Node>::default();
+    assert!(stack.is_empty());
     assert!(stack.shard_count().is_power_of_two());
     assert!(!stack.is_closed());
     assert_eq!(
@@ -75,8 +76,9 @@ fn single_thread_lifo_and_empty_callback() {
     let drops = Arc::new(AtomicUsize::new(0));
     let stack = ConcurrentShardedStack::with_concurrency(4);
     for id in 0..5 {
-        stack.push(Owned::new(Node::new(id, &drops))).unwrap();
+        stack.push(Box::new(Node::new(id, &drops))).unwrap();
     }
+    assert!(!stack.is_empty());
     for id in (0..5).rev() {
         assert_eq!(stack.pop_with(|node| node.id), Ok(id));
     }
@@ -84,19 +86,22 @@ fn single_thread_lifo_and_empty_callback() {
         stack.pop_with(|_| panic!("callback on empty stack")),
         Err(PopError::Empty)
     );
+    assert!(stack.is_empty());
+    stack.close();
+    assert!(stack.is_empty());
     drop(stack);
     collect_until(&drops, 5);
 }
 
 #[test]
-fn complete_node_address_is_preserved_and_input_tags_are_cleared() {
+fn complete_boxed_node_address_is_preserved() {
     let drops = Arc::new(AtomicUsize::new(0));
     let stack = ConcurrentShardedStack::with_concurrency(1);
     let boxed = Box::new(Node::new(7, &drops));
     let address: *const Node = &*boxed;
-    let node = Owned::<Node>::from(boxed).with_tag(1);
+    let node = boxed;
     stack.push(node).unwrap();
-    assert!(!stack.is_closed(), "input tag must not close the shard");
+    assert!(!stack.is_closed(), "push must not close the shard");
     stack
         .pop_with(|node| {
             assert_eq!(node as *const Node, address);
@@ -111,7 +116,7 @@ fn complete_node_address_is_preserved_and_input_tags_are_cleared() {
 fn initial_link_is_overwritten_without_owning_its_target() {
     let drops = Arc::new(AtomicUsize::new(0));
     let unrelated = Node::new(99, &drops);
-    let node = Owned::new(Node::new(1, &drops));
+    let node = Box::new(Node::new(1, &drops));
     // This node is not published; its initial link may contain any raw pointer.
     node.next
         .store(Shared::from(&unrelated as *const Node), Ordering::Relaxed);
@@ -130,13 +135,13 @@ fn closing_preserves_nodes_and_returns_rejected_ownership() {
     let drops = Arc::new(AtomicUsize::new(0));
     let stack = ConcurrentShardedStack::with_concurrency(4);
     for id in 0..3 {
-        stack.push(Owned::new(Node::new(id, &drops))).unwrap();
+        stack.push(Box::new(Node::new(id, &drops))).unwrap();
     }
     assert!(stack.close());
     assert!(!stack.close());
     assert!(stack.is_closed());
 
-    let rejected = Owned::new(Node::new(9, &drops));
+    let rejected = Box::new(Node::new(9, &drops));
     let address: *const Node = &*rejected;
     let error = stack.push(rejected).unwrap_err();
     assert_eq!(error.to_string(), "collection is closed");
@@ -172,7 +177,7 @@ fn remaining_nodes_are_destroyed_synchronously() {
     let drops = Arc::new(AtomicUsize::new(0));
     let stack = ConcurrentShardedStack::with_concurrency(4);
     for id in 0..20 {
-        stack.push(Owned::new(Node::new(id, &drops))).unwrap();
+        stack.push(Box::new(Node::new(id, &drops))).unwrap();
     }
     stack.close();
     drop(stack);
@@ -184,7 +189,7 @@ fn partial_drain_and_callback_panic_drop_each_node_once() {
     let drops = Arc::new(AtomicUsize::new(0));
     let stack = ConcurrentShardedStack::with_concurrency(1);
     for id in 0..20 {
-        stack.push(Owned::new(Node::new(id, &drops))).unwrap();
+        stack.push(Box::new(Node::new(id, &drops))).unwrap();
     }
     let panic = catch_unwind(AssertUnwindSafe(|| {
         let _ = stack.pop_with(|node| {
@@ -202,7 +207,7 @@ fn partial_drain_and_callback_panic_drop_each_node_once() {
 fn a_pinned_reader_delays_destruction_beyond_stack_drop() {
     let drops = Arc::new(AtomicUsize::new(0));
     let stack = ConcurrentShardedStack::with_concurrency(1);
-    stack.push(Owned::new(Node::new(0, &drops))).unwrap();
+    stack.push(Box::new(Node::new(0, &drops))).unwrap();
     let guard = epoch::pin();
     stack
         .pop_with(|node| {
@@ -250,7 +255,7 @@ fn callbacks_can_reenter_and_return_owned_data() {
     let drops = Arc::new(AtomicUsize::new(0));
     let stack = ConcurrentShardedStack::with_concurrency(1);
     let make = |name: &str| {
-        Owned::new(Job {
+        Box::new(Job {
             name: name.into(),
             next: Atomic::null(),
             prev: Atomic::null(),
@@ -289,7 +294,7 @@ fn concurrent_unique_ids(shards: usize, producers: usize, consumers: usize, clos
             start.wait();
             for offset in 0..per_producer {
                 stack
-                    .push(Owned::new(Node::new(
+                    .push(Box::new(Node::new(
                         producer * per_producer + offset,
                         &drops,
                     )))
@@ -381,7 +386,7 @@ fn close_racing_push_and_pop_accounts_for_every_allocation() {
     let mut poppers = Vec::new();
     let mut closers = Vec::new();
     // Make sure closed-shard draining is exercised even if close wins all races.
-    stack.push(Owned::new(Node::new(total, &drops))).unwrap();
+    stack.push(Box::new(Node::new(total, &drops))).unwrap();
     for producer in 0..producers {
         let (stack, start, drops) = (Arc::clone(&stack), Arc::clone(&start), Arc::clone(&drops));
         pushers.push(thread::spawn(move || {
@@ -390,7 +395,7 @@ fn close_racing_push_and_pop_accounts_for_every_allocation() {
             start.wait();
             for offset in 0..per_producer {
                 let id = producer * per_producer + offset;
-                match stack.push(Owned::new(Node::new(id, &drops))) {
+                match stack.push(Box::new(Node::new(id, &drops))) {
                     Ok(()) => accepted.push(id),
                     Err(error) => {
                         let node = error.into_inner();
@@ -485,7 +490,7 @@ fn a_stale_cas_reader_keeps_the_removed_node_alive() {
     let drops = Arc::new(AtomicUsize::new(0));
     let stack = Arc::new(ConcurrentShardedStack::with_concurrency(1));
     let make = |id| {
-        Owned::new(PausedNode {
+        Box::new(PausedNode {
             next: Atomic::null(),
             id,
             armed: Arc::clone(&armed),

@@ -88,8 +88,8 @@ impl Drop for Node {
         DROPS.fetch_add(1, Ordering::Relaxed);
     }
 }
-fn node(value: usize) -> Owned<Node> {
-    Owned::new(Node {
+fn node(value: usize) -> Box<Node> {
+    Box::new(Node {
         next: Atomic::null(),
         value,
     })
@@ -194,7 +194,7 @@ fn allocations() {
         for value in nodes.by_ref() {
             // SAFETY: unpublished uniquely owned nodes; retire exactly once.
             unsafe {
-                guard.defer_destroy(value.into_shared(guard));
+                guard.defer_destroy(Owned::<Node>::from(value).into_shared(guard));
             }
         }
     });

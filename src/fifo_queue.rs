@@ -79,9 +79,9 @@ impl<T: SinglyLinked + Send + Sync + 'static> FifoQueue<T> {
     /// The successful CAS linking the node at the end is the enqueue
     /// linearization point. Updating the tail afterwards is only helping.
     /// On a closed queue the original allocation is returned in the error,
-    /// with a null next link. Incoming tags and next contents are overwritten.
-    pub fn push(&self, node: Owned<T>) -> Result<(), PushError<T>> {
-        let mut node = node.with_tag(0);
+    /// with a null next link. Initial next contents are overwritten.
+    pub fn push(&self, node: Box<T>) -> Result<(), PushError<T>> {
+        let mut node = Owned::<T>::from(node);
         // SAFETY: the node is exclusively owned and not yet published.
         unsafe { node.next() }.store(Shared::null(), Ordering::Relaxed);
         let guard = &epoch::pin();
@@ -90,7 +90,7 @@ impl<T: SinglyLinked + Send + Sync + 'static> FifoQueue<T> {
         loop {
             let (tail, link, next) = self.tail_slot(guard);
             if next.tag() == CLOSED_TAG {
-                return Err(PushError::Closed(node));
+                return Err(PushError::Closed(node.into_box()));
             }
             match link.compare_exchange_weak(
                 next,
@@ -336,8 +336,8 @@ mod helping_tests {
         }
     }
 
-    fn node(id: usize, drops: &Arc<AtomicUsize>) -> Owned<Node> {
-        Owned::new(Node {
+    fn node(id: usize, drops: &Arc<AtomicUsize>) -> Box<Node> {
+        Box::new(Node {
             next: Atomic::null(),
             id,
             drops: Arc::clone(drops),
@@ -346,14 +346,20 @@ mod helping_tests {
 
     // Model an enqueuer paused immediately after its publication CAS, before
     // help_tail. Public operations must finish without that enqueuer resuming.
-    fn publish_without_advancing_tail(queue: &FifoQueue<Node>, node: Owned<Node>) {
+    fn publish_without_advancing_tail(queue: &FifoQueue<Node>, node: Box<Node>) {
         let guard = &epoch::pin();
         let (_, link, next) = queue.tail_slot(guard);
         assert!(next.is_null());
         assert_eq!(next.tag(), 0);
         assert!(
-            link.compare_exchange(next, node, Ordering::Release, Ordering::Relaxed, guard)
-                .is_ok()
+            link.compare_exchange(
+                next,
+                Owned::from(node),
+                Ordering::Release,
+                Ordering::Relaxed,
+                guard
+            )
+            .is_ok()
         );
     }
 

@@ -1,6 +1,5 @@
 use concurrent_intrusive_collections::{
-    ConcurrentShardedQueue, PopError, SinglyLinked,
-    epoch::{Atomic, Owned},
+    AtomicLink as Atomic, ConcurrentShardedQueue, PopError, SinglyLinked,
 };
 use std::sync::Arc;
 use std::thread;
@@ -41,7 +40,7 @@ fn main() {
             scope.spawn(move || {
                 for offset in 0..100 {
                     queue
-                        .push(Owned::new(Job {
+                        .push(Box::new(Job {
                             next: Atomic::null(),
                             id: producer * 100 + offset,
                         }))

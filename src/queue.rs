@@ -1,7 +1,6 @@
 use crate::fifo_queue::FifoQueue;
 use crate::helper::{current_thread_id, default_concurrency};
 use crate::{PopError, PushError, SinglyLinked, epoch};
-use epoch::Owned;
 
 /// An intrusive MPMC queue distributed across independent FIFO shards.
 ///
@@ -24,7 +23,7 @@ use epoch::Owned;
 ///
 /// ```
 /// use concurrent_intrusive_collections::{ConcurrentShardedQueue, PopError, SinglyLinked,
-///     epoch::{Atomic, Owned}};
+///     AtomicLink as Atomic};
 /// struct Job { next: Atomic<Self>, id: usize }
 /// // SAFETY: each node has a fixed, private, non-owning forward link.
 /// unsafe impl SinglyLinked for Job {
@@ -32,7 +31,7 @@ use epoch::Owned;
 /// }
 /// let queue = ConcurrentShardedQueue::with_concurrency(4);
 /// // One producer thread always enqueues into the same shard.
-/// for id in 0..3 { queue.push(Owned::new(Job { next: Atomic::null(), id })).unwrap(); }
+/// for id in 0..3 { queue.push(Box::new(Job { next: Atomic::null(), id })).unwrap(); }
 /// queue.close();
 /// for id in 0..3 { assert_eq!(queue.pop_with(|job| job.id), Ok(id)); }
 /// assert_eq!(queue.pop_with(|_| ()), Err(PopError::Closed));
@@ -79,8 +78,8 @@ impl<T: SinglyLinked + Send + Sync + 'static> ConcurrentShardedQueue<T> {
     /// Transfers the original node allocation into this thread's shard.
     ///
     /// A closed shard returns the original allocation with its next link cleared.
-    /// Incoming pointer tags and link contents are discarded as in the FIFO queue.
-    pub fn push(&self, node: Owned<T>) -> Result<(), PushError<T>> {
+    /// Initial link contents are discarded as in the FIFO shard.
+    pub fn push(&self, node: Box<T>) -> Result<(), PushError<T>> {
         self.shards[self.current_shard_index()].push(node)
     }
 
@@ -180,7 +179,7 @@ mod tests {
         for shard in 0..8 {
             for offset in 0..2 {
                 queue.shards[shard]
-                    .push(Owned::new(Node {
+                    .push(Box::new(Node {
                         next: Atomic::null(),
                         id: shard * 2 + offset,
                     }))

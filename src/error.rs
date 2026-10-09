@@ -1,15 +1,14 @@
-use crate::epoch::Owned;
 use std::fmt;
 
 /// A rejected push, retaining ownership of the unpublished node.
 pub enum PushError<T> {
     /// The collection was closed. The node can be reused or dropped.
-    Closed(Owned<T>),
+    Closed(Box<T>),
 }
 
 impl<T> PushError<T> {
     /// Recovers ownership of the rejected node.
-    pub fn into_inner(self) -> Owned<T> {
+    pub fn into_inner(self) -> Box<T> {
         match self {
             Self::Closed(node) => node,
         }
@@ -19,7 +18,10 @@ impl<T> PushError<T> {
 impl<T> fmt::Debug for PushError<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Closed(node) => f.debug_tuple("Closed").field(node).finish(),
+            Self::Closed(node) => f
+                .debug_tuple("Closed")
+                .field(&(node.as_ref() as *const T))
+                .finish(),
         }
     }
 }

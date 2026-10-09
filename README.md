@@ -12,7 +12,7 @@ or `intrusive-collections` dependency.
 
 ```toml
 [dependencies]
-concurrent-intrusive-collections = "0.2"
+concurrent-intrusive-collections = "0.3"
 ```
 
 Requires **Rust 1.85+** and pointer-width atomics. The default `std` feature enables
@@ -24,7 +24,11 @@ reexport, not the concurrent containers themselves.
 | `ConcurrentShardedQueue` | FIFO per shard | Closes shards individually | Concurrent work with relaxed global ordering |
 | `ConcurrentShardedStack` | LIFO per shard | Closes shards individually | Locality-oriented work stacks |
 
-These APIs transfer `Owned<T>` nodes and expose popped data through shared-borrow
+Push accepts a standard `Box<T>` and internally converts it to epoch ownership
+without reallocating or moving the node. `AtomicLink` is a reexport of Crossbeam
+Atomic for the link field; neither push nor errors require Crossbeam `Owned`.
+
+These APIs transfer `Box<T>` nodes and expose popped data through shared-borrow
 callbacks. They do not yield an owned node for immediate reuse. Queue shards can
 retain their last popped node as a dummy. Read the
 [safety and ownership contract](https://github.com/zhongyi51/concurrent-intrusive-collections/blob/main/docs/SAFETY.md)
@@ -37,9 +41,9 @@ cargo run --example work_queue
 
 ## Link traits
 
-- `SinglyLinked`: an unsafe `next(&self) -> &epoch::Atomic<Self>` accessor.
+- `SinglyLinked`: an unsafe `next(&self) -> &AtomicLink<Self>` accessor.
 - `DoublyLinked: SinglyLinked`: adds an unsafe
-  `prev(&self) -> &epoch::Atomic<Self>` accessor.
+  `prev(&self) -> &AtomicLink<Self>` accessor.
 
 Links point to **complete nodes**, not embedded link objects. Each accessor must
 return a stable, private atomic field within its node. Link fields are non-owning:
@@ -59,7 +63,7 @@ per-shard closed head tags. The adapted code is distributed under the MIT licens
 ```rust
 use concurrent_intrusive_collections::{
     ConcurrentShardedStack, PopError, SinglyLinked,
-    epoch::{Atomic, Owned},
+    AtomicLink as Atomic,
 };
 
 struct Job {
@@ -75,7 +79,7 @@ unsafe impl SinglyLinked for Job {
 }
 
 let stack = ConcurrentShardedStack::with_concurrency(4);
-stack.push(Owned::new(Job {
+stack.push(Box::new(Job {
     next: Atomic::null(),
     name: "compile".into(),
 })).unwrap();
@@ -95,15 +99,16 @@ The stack is `Send + Sync` for nodes implementing
 | --- | --- |
 | `new()` | Uses available parallelism, rounded up to a power of two. |
 | `with_concurrency(n)` | Uses exactly `n` shards; `n` must be a nonzero power of two. |
-| `push(Owned<T>)` | Transfers ownership of the original node allocation, without adding a wrapper. |
+| `push(Box<T>)` | Transfers ownership of the original node allocation, without adding a wrapper. |
 | `pop_with(f)` | Removes a node and returns the result of `f(&T)`; returns `Empty` or `Closed` if none was found. |
 | `close()` | Closes all shards, allowing existing nodes to drain. |
+| `is_empty()` | Observes empty shards during a scan; not a global snapshot. |
 | `is_closed()` | Reports whether all shards were observed closed. |
 | `shard_count()` | Returns the configured shard count. |
 
 A rejected push returns the original allocation in `PushError::Closed`; use
-`into_inner()` to recover its `Owned<T>`. Its forward link is cleared. Input
-pointer tags are discarded because the stack reserves the head tag for closing.
+`into_inner()` to recover its original `Box<T>`. Its forward link is cleared.
+Pointer tags are internal; callers do not construct epoch ownership wrappers.
 
 ### Ordering and closing
 
@@ -119,7 +124,7 @@ new pushes fail. Closed shards retain their nodes until popped or dropped.
 ### Ownership and reclamation
 
 ```text
-Owned<T> --push--> linked node --pop_with--> shared callback access
+Box<T> --push--> linked node --pop_with--> shared callback access
                                                |
                                                v
                                   epoch-deferred node destruction
@@ -166,7 +171,7 @@ succeed on still-open shards. All later pushes fail after `close()` returns.
 Existing nodes remain drainable. Each used shard can retain its last popped node
 as a dummy until its next successful pop or collection destruction.
 
-The API is `push(Owned<T>)`, `pop_with(f)`, `close()`, `is_closed()`, and
+The API is `push(Box<T>)`, `pop_with(f)`, `close()`, `is_closed()`, and
 `is_empty()`, with the same node bounds and callback restrictions as the stack.
 Use `with_concurrency(1)` for globally ordered FIFO through the same public API.
 

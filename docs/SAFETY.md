@@ -1,6 +1,6 @@
 # Ownership, ordering, and memory safety
 
-This document records the implementation invariants for version 0.2.0. It is an
+This document records the implementation invariants for version 0.3.0. It is an
 audit aid, not a formal proof or a substitute for the unsafe trait contracts.
 
 ## Node contract
@@ -12,10 +12,11 @@ from changing links while a collection owns the node or retirement is pending.
 Keeping the fields private is part of maintaining this boundary, not sufficient
 by itself. Destructors must not follow or reclaim the non-owning links.
 
-Collections require `Send + Sync + 'static`. `Owned<T>` transfers an allocation
-exactly once. Incoming tags and the forward link are cleared before publication;
+Collections require `Send + Sync + 'static`. `Box<T>` transfers an allocation
+exactly once. Internally `Owned::<T>::from(boxed)` retains the original allocation
+and address without allocating again. Rejection converts it back with `into_box`. The forward link is cleared before publication;
 only one low tag bit is used for closure. Node alignment is checked. A rejected
-push returns the original allocation. There is no `&mut T`, `Owned<T>`, or escaping
+push returns the original allocation. A successful pop yields no `&mut T`, `Box<T>`, or escaping
 borrow available from a successful pop. Payloads can be copied or cloned inside
 the callback, which may reenter the collection.
 
